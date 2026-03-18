@@ -119,6 +119,12 @@ class ManuscriptFormatterApp:
                        variable=self.zotero_var,
                        font=('Segoe UI', 9)).pack(anchor='w')
 
+        self.crossref_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(opt_frame,
+                       text='Look up unmatched references via CrossRef (requires internet)',
+                       variable=self.crossref_var,
+                       font=('Segoe UI', 9)).pack(anchor='w')
+
         # ── Format button ──
         tk.Button(frame, text='Format Manuscript',
                   command=self._format_manuscript,
@@ -205,13 +211,20 @@ class ManuscriptFormatterApp:
             self.status_var.set('Cancelled')
             return
 
+        # Progress callback for GUI updates
+        def progress_cb(current, total, message):
+            self.status_var.set(message)
+            self.root.update()
+
         # Build
         self.status_var.set(f'Building {format_name} document...')
         self.root.update()
         try:
             plugin.build(items, output_path,
                          ris_data=ris_data,
-                         zotero_enabled=self.zotero_var.get())
+                         zotero_enabled=self.zotero_var.get(),
+                         use_crossref=self.crossref_var.get(),
+                         progress_callback=progress_cb)
         except Exception as e:
             messagebox.showerror('Build Error',
                                  f'Failed to build document:\n{e}')
