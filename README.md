@@ -13,9 +13,12 @@ This tool automates that. It reads your manuscript once, classifies every elemen
 ## Key Features
 
 - **Two journal formats** — MDPI and Elsevier, with more coming
-- **Word-recognizable captions** — Table and Figure captions use SEQ fields, so Word's cross-references, "Insert Table of Figures", and auto-numbering all work
-- **RIS bibliography import** — Upload a `.ris` file exported from Zotero, Mendeley, or any reference manager. The tool cross-checks your hardwritten citations against the RIS metadata and reformats them in the correct journal style (MDPI numbered format)
-- **Zotero field code embedding** — Optionally wrap references in Zotero `ADDIN ZOTERO_ITEM CSL_CITATION` field codes, so Zotero can recognize and manage them after formatting
+- **Word-recognizable captions** — Table and Figure captions use SEQ fields with bookmarks. Word's cross-references, "Insert Table of Figures", and auto-numbering all work. Named styles (`MDPI41tablecaption`, etc.) are registered in the document.
+- **Smart reference resolution** — Three-tier pipeline: extract DOIs from reference text (regex), match against RIS records (local), look up unmatched via CrossRef API (free, no auth). Works regardless of input citation style.
+- **MDPI reference formatting** — `N.` + TAB numbering (not `[N]`), *italic journal names*, en-dash page ranges, structured runs matching published MDPI papers
+- **RIS bibliography import** — Upload a `.ris` file from Zotero, Mendeley, or any reference manager. The tool cross-checks hardwritten citations against RIS metadata by DOI, author names, year, and title.
+- **CrossRef API lookup** — For references without a `.ris` match, optionally look them up online via the free CrossRef API. Works by DOI or bibliographic text search.
+- **Zotero field code embedding** — Optionally wrap references in Zotero `ADDIN ZOTERO_ITEM CSL_CITATION` field codes with `w:dirty` flag and full `w:rPr` on every run, so Zotero can recognize and manage them after formatting
 - **Plugin architecture** — Drop a new `.py` file in `formats/` to add a journal format
 
 ## Supported Formats
@@ -61,7 +64,9 @@ A window opens with these controls:
 1. **Manuscript (.docx)** — Select your manuscript file
 2. **Bibliography (.ris)** — Optionally load a `.ris` file for reference matching
 3. **Format** — Choose MDPI or Elsevier
-4. **Options** — Check "Embed Zotero field codes" if you want Zotero integration
+4. **Options**:
+   - "Embed Zotero field codes" — wraps references in Zotero-compatible field codes
+   - "Look up unmatched references via CrossRef" — uses the free CrossRef API for references not matched by RIS
 5. **Format Manuscript** — Processes and opens a Save As dialog
 
 ## RIS Bibliography Workflow
@@ -129,24 +134,32 @@ refs.ris ────┐        │
 
 ## MDPI Reference Format
 
-MDPI uses a numbered citation style. When a `.ris` file is provided, references are automatically formatted as:
+MDPI uses a numbered citation style. References are formatted in the `MDPIBibliography` style (hanging indent, 10pt) with `N.` + TAB numbering — matching published MDPI papers.
+
+When metadata is available (via `.ris` or CrossRef), references are automatically formatted as:
 
 **Journal article:**
 ```
-Shannon, C.E.; Weaver, W. A Mathematical Theory of Communication. Bell Syst. Tech. J. 1948, 27, 379-423. https://doi.org/10.1002/j.1538-7305.1948.tb01338.x.
+1.	Shannon, C.E.; Weaver, W. A Mathematical Theory of Communication. Bell Syst. Tech. J. 1948, 27, 379–423. https://doi.org/10.1002/j.1538-7305.1948.tb01338.x
 ```
 
 **Book:**
 ```
-Smith, J.D. Introduction to Chemical Engineering, 3rd; Wiley: New York, 2020.
+2.	Smith, J.D. Introduction to Chemical Engineering, 3rd; Wiley: New York, 2020.
 ```
 
 **Book chapter:**
 ```
-Jones, R.A. Absorption in Packed Columns. In Handbook of Chemical Engineering; Smith, J.D., Ed.; McGraw-Hill: New York, 2019; pp. 145-198.
+3.	Jones, R.A. Absorption in Packed Columns. In Handbook of Chemical Engineering; Smith, J.D., Ed.; McGraw-Hill: New York, 2019; pp. 145–198.
 ```
 
-Author names are formatted as `Lastname, F.M.` with semicolons between authors. DOIs are appended as full URLs.
+Key formatting details:
+- Author names: `Lastname, F.M.` with semicolons between authors
+- Journal names are **italic** (run-level formatting, not just text)
+- Page ranges use en-dash (–) not hyphen (-)
+- DOIs as full URLs
+- `N.` + TAB numbering (not `[N]` brackets) matching the MDPI standard
+- Hanging indent via the `MDPIBibliography` named Word style
 
 ## Manuscript Preparation Tips
 
@@ -258,21 +271,25 @@ journal_formatting/
 ├── manuscript_formatter.py     # Tkinter GUI
 ├── reader.py                   # Manuscript reader & classifier
 ├── ris_parser.py               # RIS bibliography file parser
-├── citation_formatter.py       # MDPI reference formatter
-├── caption_fields.py           # Word SEQ field captions & Zotero field codes
+├── citation_formatter.py       # MDPI reference formatter (structured runs)
+├── caption_fields.py           # Word SEQ captions, bookmarks, Zotero fields, named styles
+├── crossref_client.py          # CrossRef API client (DOI lookup + text search)
+├── reference_engine.py         # Reference resolution pipeline orchestrator
 ├── formats/
 │   ├── __init__.py             # Plugin auto-discovery
 │   ├── elsevier.py             # Elsevier format builder
-│   └── mdpi.py                 # MDPI format builder
-├── tests/                      # 53 tests
+│   └── mdpi.py                 # MDPI format builder (v2 — named styles, reference engine)
+├── tests/                      # 66 tests
 │   ├── conftest.py             # Test fixtures (sample manuscripts)
 │   ├── test_reader.py          # Reader tests (14)
 │   ├── test_registry.py        # Plugin registry tests (4)
 │   ├── test_elsevier.py        # Elsevier builder tests (8)
 │   ├── test_mdpi.py            # MDPI builder tests (10)
 │   ├── test_integration.py     # End-to-end pipeline tests (4)
-│   ├── test_ris_parser.py      # RIS parser & formatter tests (9)
-│   └── test_caption_fields.py  # Caption & Zotero field tests (4)
+│   ├── test_ris_parser.py      # RIS parser & formatter tests (12)
+│   ├── test_caption_fields.py  # Caption & Zotero field tests (4)
+│   ├── test_crossref.py        # CrossRef client tests (5)
+│   └── test_reference_engine.py # Reference pipeline tests (5)
 ├── requirements.txt
 └── .gitignore
 ```
@@ -284,7 +301,7 @@ journal_formatting/
 python -m pytest tests/ -v
 ```
 
-53 tests cover the reader, plugin registry, both format builders, RIS parsing, citation formatting, caption fields, Zotero integration, and full pipeline.
+66 tests cover the reader, plugin registry, both format builders, RIS parsing, citation formatting (with italic runs), caption fields (with bookmarks), CrossRef client, reference resolution engine, Zotero integration, and full pipeline.
 
 ## Dependencies
 
