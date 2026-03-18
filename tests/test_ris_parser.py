@@ -128,7 +128,7 @@ def test_format_reference_mdpi_journal():
     assert 'Mathematical Theory' in result
     assert '1948' in result
     assert '27' in result
-    assert '379-423' in result
+    assert '379\u2013423' in result
 
 
 def test_format_reference_mdpi_book():
@@ -148,3 +148,48 @@ def test_format_reference_mdpi_book():
     assert 'Introduction to Chemical Engineering' in result
     assert 'Wiley' in result
     assert '2020' in result
+
+
+def test_format_reference_mdpi_runs_has_italic_journal():
+    from citation_formatter import format_reference_mdpi_runs
+    ref = {
+        'type': 'JOUR',
+        'authors': ['Shannon, Claude E.'],
+        'title': 'A Mathematical Theory of Communication',
+        'journal': 'Bell Syst. Tech. J.',
+        'year': '1948', 'volume': '27',
+        'start_page': '379', 'end_page': '423',
+        'doi': '10.1002/test', 'issue': '', 'publisher': '', 'place': '',
+        'edition': '', 'editors': [], 'url': '', 'keywords': [], 'isbn': '', 'abstract': '',
+    }
+    runs = format_reference_mdpi_runs(ref, 1)
+    italic_runs = [r for r in runs if r['italic']]
+    assert len(italic_runs) >= 1
+    assert any('Bell Syst' in r['text'] for r in italic_runs)
+
+
+def test_format_reference_mdpi_runs_numbering():
+    from citation_formatter import format_reference_mdpi_runs
+    ref = {
+        'type': 'JOUR', 'authors': ['Test, A.'],
+        'title': 'Test', 'journal': 'J. Test',
+        'year': '2020', 'volume': '1', 'start_page': '1', 'end_page': '2',
+        'doi': '', 'issue': '', 'publisher': '', 'place': '',
+        'edition': '', 'editors': [], 'url': '', 'keywords': [], 'isbn': '', 'abstract': '',
+    }
+    runs = format_reference_mdpi_runs(ref, 5)
+    assert runs[0]['text'].startswith('5.\t')
+
+
+def test_format_reference_mdpi_runs_endash_pages():
+    from citation_formatter import format_reference_mdpi_runs
+    ref = {
+        'type': 'JOUR', 'authors': ['Test, A.'],
+        'title': 'Test', 'journal': 'J. Test',
+        'year': '2020', 'volume': '1', 'start_page': '100', 'end_page': '200',
+        'doi': '', 'issue': '', 'publisher': '', 'place': '',
+        'edition': '', 'editors': [], 'url': '', 'keywords': [], 'isbn': '', 'abstract': '',
+    }
+    runs = format_reference_mdpi_runs(ref, 1)
+    all_text = ''.join(r['text'] for r in runs)
+    assert '\u2013' in all_text  # en-dash between pages
