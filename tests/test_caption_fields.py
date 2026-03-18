@@ -8,8 +8,10 @@ def test_add_caption_with_seq():
     from caption_fields import add_caption_with_seq
     doc = Document()
     para = doc.add_paragraph()
-    add_caption_with_seq(para, 'Table', 1, description='Sample data',
-                         font_size=Pt(9))
+    bm_name = add_caption_with_seq(para, 'Table', 1, description='Sample data',
+                                    font_size=Pt(9))
+    # Returns a bookmark name
+    assert bm_name.startswith('_RefTable1_')
     # Check that the paragraph has fldChar elements (SEQ field)
     p_xml = para._p
     fld_chars = p_xml.findall(f'.//{docx_qn("w:fldChar")}')
@@ -23,14 +25,24 @@ def test_add_caption_with_seq():
     assert 'Table' in full
     assert '1' in full
     assert 'Sample data' in full
+    # Check bookmarkStart and bookmarkEnd present
+    bm_starts = p_xml.findall(f'.//{docx_qn("w:bookmarkStart")}')
+    bm_ends = p_xml.findall(f'.//{docx_qn("w:bookmarkEnd")}')
+    assert len(bm_starts) == 1
+    assert len(bm_ends) == 1
+    assert bm_starts[0].get(docx_qn('w:name')) == bm_name
+    # Check w:noProof on the number run
+    no_proofs = p_xml.findall(f'.//{docx_qn("w:noProof")}')
+    assert len(no_proofs) >= 1
 
 
 def test_add_figure_caption_with_seq():
     from caption_fields import add_caption_with_seq
     doc = Document()
     para = doc.add_paragraph()
-    add_caption_with_seq(para, 'Figure', 3, description='A nice plot',
-                         font_size=Pt(10))
+    bm_name = add_caption_with_seq(para, 'Figure', 3, description='A nice plot',
+                                    font_size=Pt(10))
+    assert bm_name.startswith('_RefFigure3_')
     p_xml = para._p
     instr = p_xml.findall(f'.//{docx_qn("w:instrText")}')
     assert any('SEQ Figure' in (el.text or '') for el in instr)
