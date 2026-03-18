@@ -104,6 +104,8 @@ def add_zotero_citation_field(para, citation_json, visible_text,
     """Add a Zotero-compatible citation field code to a paragraph.
 
     Creates ADDIN ZOTERO_ITEM CSL_CITATION field with the JSON payload.
+    All runs include w:rPr for Word/Zotero compatibility, and the begin
+    fldChar includes w:dirty="true" so Word processes the field on open.
 
     Args:
         para: python-docx Paragraph object
@@ -112,11 +114,10 @@ def add_zotero_citation_field(para, citation_json, visible_text,
         font_name: Font name
         font_size: docx.shared.Pt value
     """
-    import json
     p = para._p
 
-    def make_run(text):
-        r = lxml_etree.SubElement(p, docx_qn('w:r'))
+    def _add_rpr(r):
+        """Add standard run properties to a run element."""
         rpr = lxml_etree.SubElement(r, docx_qn('w:rPr'))
         rfonts = lxml_etree.SubElement(rpr, docx_qn('w:rFonts'))
         rfonts.set(docx_qn('w:ascii'), font_name)
@@ -124,23 +125,34 @@ def add_zotero_citation_field(para, citation_json, visible_text,
         if font_size:
             sz = lxml_etree.SubElement(rpr, docx_qn('w:sz'))
             sz.set(docx_qn('w:val'), str(int(font_size.pt * 2)))
+            szcs = lxml_etree.SubElement(rpr, docx_qn('w:szCs'))
+            szcs.set(docx_qn('w:val'), str(int(font_size.pt * 2)))
+        return rpr
+
+    def make_run(text):
+        r = lxml_etree.SubElement(p, docx_qn('w:r'))
+        _add_rpr(r)
         t = lxml_etree.SubElement(r, docx_qn('w:t'))
         t.text = text
         if text and (text[0] == ' ' or text[-1] == ' '):
             t.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
 
-    def make_fld_char(fld_type):
+    def make_fld_char(fld_type, dirty=False):
         r = lxml_etree.SubElement(p, docx_qn('w:r'))
+        _add_rpr(r)
         fc = lxml_etree.SubElement(r, docx_qn('w:fldChar'))
         fc.set(docx_qn('w:fldCharType'), fld_type)
+        if dirty:
+            fc.set(docx_qn('w:dirty'), 'true')
 
     def make_instr_text(instruction):
         r = lxml_etree.SubElement(p, docx_qn('w:r'))
+        _add_rpr(r)
         it = lxml_etree.SubElement(r, docx_qn('w:instrText'))
         it.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
         it.text = instruction
 
-    make_fld_char('begin')
+    make_fld_char('begin', dirty=True)
     make_instr_text(f' ADDIN ZOTERO_ITEM CSL_CITATION {citation_json} ')
     make_fld_char('separate')
     make_run(visible_text)
