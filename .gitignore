@@ -7,3 +7,4 @@ dist/
 build/
 *.docx
 !tests/fixtures/*.docx
+!formats/mdpi_styles.docx
