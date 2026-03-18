@@ -12,6 +12,7 @@ from docx.shared import Pt, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from lxml import etree as lxml_etree
+from caption_fields import add_caption_with_seq
 
 FORMAT_NAME = 'Elsevier'
 FORMAT_SUFFIX = '_Elsevier'
@@ -183,7 +184,7 @@ def _add_three_line_table(doc, table_data):
     return table
 
 
-def build(items, output_path):
+def build(items, output_path, ris_data=None, zotero_enabled=False):
     doc = DocxDocument()
 
     section = doc.sections[0]
@@ -368,12 +369,13 @@ def build(items, output_path):
             para.alignment = WD_ALIGN_PARAGRAPH.LEFT
             _set_spacing(para, before=12, after=4)
             text = elem['text']
-            match = re.match(r'^(Table\s+\d+\.)\s*(.*)', text)
+            match = re.match(r'^Table\s+(\d+)\.?\s*(.*)', text)
             if match:
-                label_run = para.add_run(match.group(1) + ' ')
-                _set_run_font(label_run, size=TABLE_CAPTION_SIZE, bold=True)
-                desc_run = para.add_run(match.group(2))
-                _set_run_font(desc_run, size=TABLE_CAPTION_SIZE)
+                num = match.group(1)
+                desc = match.group(2)
+                add_caption_with_seq(para, 'Table', num, description=desc,
+                                     font_name=FONT_NAME, font_size=TABLE_CAPTION_SIZE,
+                                     bold_label=True)
             else:
                 run = para.add_run(text)
                 _set_run_font(run, size=TABLE_CAPTION_SIZE)
@@ -393,14 +395,13 @@ def build(items, output_path):
             para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             _set_spacing(para, before=12, after=12)
             text = elem['text']
-            match = re.match(r'^(\[?\s*Figure\s+\d+\]?\.?\s*)(.*)',
-                             text, re.IGNORECASE)
+            match = re.match(r'^\[?\s*Figure\s+(\d+)\]?\.?\s*(.*)', text, re.IGNORECASE)
             if match:
-                label_run = para.add_run(match.group(1))
-                _set_run_font(label_run, size=TABLE_CAPTION_SIZE, bold=True)
-                if match.group(2):
-                    desc_run = para.add_run(match.group(2))
-                    _set_run_font(desc_run, size=TABLE_CAPTION_SIZE)
+                num = match.group(1)
+                desc = match.group(2)
+                add_caption_with_seq(para, 'Figure', num, description=desc,
+                                     font_name=FONT_NAME, font_size=TABLE_CAPTION_SIZE,
+                                     bold_label=True)
             else:
                 run = para.add_run(text)
                 _set_run_font(run, size=TABLE_CAPTION_SIZE)
