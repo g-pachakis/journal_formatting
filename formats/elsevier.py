@@ -12,7 +12,7 @@ from docx.shared import Pt, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from lxml import etree as lxml_etree
-from caption_fields import add_caption_with_seq
+from caption_fields import register_elsevier_caption_styles, add_caption_with_seq
 
 FORMAT_NAME = 'Elsevier'
 FORMAT_SUFFIX = '_Elsevier'
@@ -184,7 +184,8 @@ def _add_three_line_table(doc, table_data):
     return table
 
 
-def build(items, output_path, ris_data=None, zotero_enabled=False):
+def build(items, output_path, ris_data=None, zotero_enabled=False,
+          use_crossref=False, progress_callback=None):
     doc = DocxDocument()
 
     section = doc.sections[0]
@@ -201,6 +202,8 @@ def build(items, output_path, ris_data=None, zotero_enabled=False):
     style.paragraph_format.line_spacing = LINE_SPACING
     style.paragraph_format.space_after = Pt(0)
     style.paragraph_format.space_before = Pt(0)
+
+    register_elsevier_caption_styles(doc)
 
     abstract_text_parts = []
     keywords_text = ''
@@ -366,15 +369,18 @@ def build(items, output_path, ris_data=None, zotero_enabled=False):
             continue
         if etype == 'table_caption':
             para = doc.add_paragraph()
-            para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            _set_spacing(para, before=12, after=4)
+            try:
+                para.style = doc.styles['ElsevierTableCaption']
+            except KeyError:
+                para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                _set_spacing(para, before=12, after=4)
             text = elem['text']
             match = re.match(r'^Table\s+(\d+)\.?\s*(.*)', text)
             if match:
-                num = match.group(1)
-                desc = match.group(2)
-                add_caption_with_seq(para, 'Table', num, description=desc,
-                                     font_name=FONT_NAME, font_size=TABLE_CAPTION_SIZE,
+                add_caption_with_seq(para, 'Table', match.group(1),
+                                     description=match.group(2),
+                                     font_name=FONT_NAME,
+                                     font_size=TABLE_CAPTION_SIZE,
                                      bold_label=True)
             else:
                 run = para.add_run(text)
@@ -392,15 +398,18 @@ def build(items, output_path, ris_data=None, zotero_enabled=False):
             continue
         if etype == 'figure_placeholder':
             para = doc.add_paragraph()
-            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            _set_spacing(para, before=12, after=12)
+            try:
+                para.style = doc.styles['ElsevierFigureCaption']
+            except KeyError:
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                _set_spacing(para, before=12, after=12)
             text = elem['text']
             match = re.match(r'^\[?\s*Figure\s+(\d+)\]?\.?\s*(.*)', text, re.IGNORECASE)
             if match:
-                num = match.group(1)
-                desc = match.group(2)
-                add_caption_with_seq(para, 'Figure', num, description=desc,
-                                     font_name=FONT_NAME, font_size=TABLE_CAPTION_SIZE,
+                add_caption_with_seq(para, 'Figure', match.group(1),
+                                     description=match.group(2),
+                                     font_name=FONT_NAME,
+                                     font_size=TABLE_CAPTION_SIZE,
                                      bold_label=True)
             else:
                 run = para.add_run(text)
