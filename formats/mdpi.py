@@ -12,6 +12,9 @@ from docx.shared import Pt, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from lxml import etree as lxml_etree
+from caption_fields import add_caption_with_seq, add_zotero_citation_field, ris_to_csl_json
+from ris_parser import match_citation_to_ris
+from citation_formatter import format_reference_mdpi
 
 FORMAT_NAME = 'MDPI'
 FORMAT_SUFFIX = '_MDPI'
@@ -37,7 +40,7 @@ STYLES = {
     'heading3':      (Pt(10),  False, False, WD_ALIGN_PARAGRAPH.LEFT,    Pt(3),  Pt(3),  Pt(14), LEFT_INDENT, None,      2),
     'text':          (Pt(10),  False, False, WD_ALIGN_PARAGRAPH.JUSTIFY, None,   None,   Pt(14), LEFT_INDENT, Pt(21.25), None),
     'textnoindent':  (Pt(10),  False, False, WD_ALIGN_PARAGRAPH.JUSTIFY, None,   None,   Pt(14), LEFT_INDENT, Pt(0),     None),
-    'tablecaption':  (Pt(9),   False, False, WD_ALIGN_PARAGRAPH.JUSTIFY, Pt(12), Pt(6),  Pt(14), LEFT_INDENT, None,      None),
+    'tablecaption':  (Pt(9),   False, False, WD_ALIGN_PARAGRAPH.LEFT,    Pt(12), Pt(6),  Pt(14), LEFT_INDENT, None,      None),
     'tablebody':     (Pt(10),  False, False, WD_ALIGN_PARAGRAPH.CENTER,  None,   None,   Pt(13), None,        None,      None),
     'tablefooter':   (Pt(9),   False, False, WD_ALIGN_PARAGRAPH.JUSTIFY, None,   None,   Pt(14), LEFT_INDENT, None,      None),
     'figurecaption': (Pt(9),   False, False, WD_ALIGN_PARAGRAPH.JUSTIFY, Pt(6),  Pt(12), Pt(14), LEFT_INDENT, None,      None),
@@ -231,7 +234,7 @@ def _add_three_line_table(doc, table_data):
     return table
 
 
-def build(items, output_path):
+def build(items, output_path, ris_data=None, zotero_enabled=False):
     doc = DocxDocument()
 
     section = doc.sections[0]
@@ -310,10 +313,15 @@ def build(items, output_path):
             continue
         if itype == 'table_caption':
             text = item['text']
-            match = re.match(r'^(Table\s+\d+\.?\s*)(.*)', text)
+            match = re.match(r'^Table\s+(\d+)\.?\s*(.*)', text)
             if match:
-                _add_para(doc, 'tablecaption', match.group(2),
-                          bold_prefix=match.group(1))
+                num = match.group(1)
+                desc = match.group(2)
+                para = doc.add_paragraph()
+                _apply_style(para, 'tablecaption')
+                add_caption_with_seq(para, 'Table', num, description=desc,
+                                     font_name=FONT_NAME, font_size=Pt(9),
+                                     font_color=FONT_COLOR, bold_label=True)
             else:
                 _add_para(doc, 'tablecaption', text)
             after_heading = False
@@ -327,12 +335,49 @@ def build(items, output_path):
             after_heading = False
             continue
         if itype == 'figure_placeholder':
-            _add_runs_para(doc, 'figurecaption', item['runs'])
+            text = item['text']
+            match = re.match(r'^\[?\s*Figure\s+(\d+)\]?\.?\s*(.*)', text, re.IGNORECASE)
+            if match:
+                num = match.group(1)
+                desc = match.group(2)
+                para = doc.add_paragraph()
+                _apply_style(para, 'figurecaption')
+                add_caption_with_seq(para, 'Figure', num, description=desc,
+                                     font_name=FONT_NAME, font_size=Pt(9),
+                                     font_color=FONT_COLOR, bold_label=True)
+            else:
+                _add_runs_para(doc, 'figurecaption', item['runs'])
             after_heading = False
             continue
         if itype == 'reference':
-            _add_runs_para(doc, 'textnoindent', item['runs'],
-                           size_override=Pt(9))
+            ref_text = item['text']
+            matched_ris = None
+            if ris_data:
+                matched_ris = match_citation_to_ris(ref_text, ris_data)
+
+            if matched_ris:
+                # Reformat using RIS metadata in MDPI style
+                formatted = format_reference_mdpi(matched_ris)
+                # Extract reference number from original
+                num_match = re.match(r'^\[?(\d+)\]?\s*', ref_text)
+                if num_match:
+                    formatted = f'{num_match.group(0)}{formatted}'
+
+                para = doc.add_paragraph()
+                _apply_style(para, 'textnoindent')
+
+                if zotero_enabled:
+                    csl_json = ris_to_csl_json(matched_ris,
+                                                int(num_match.group(1)) if num_match else 1)
+                    add_zotero_citation_field(para, csl_json, formatted,
+                                              font_name=FONT_NAME, font_size=Pt(9))
+                else:
+                    run = para.add_run(formatted)
+                    _set_run_font(run, size=Pt(9))
+            else:
+                # No RIS match — preserve original text
+                _add_runs_para(doc, 'textnoindent', item['runs'],
+                               size_override=Pt(9))
             after_heading = False
             continue
 
